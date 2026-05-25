@@ -1,0 +1,598 @@
+<!--
+  =============================================================================
+  FRIDGE HERO — Single-page AI recipe generator
+  =============================================================================
+
+  WHAT THIS APP DOES:
+  Enter up to three ingredients you have on hand. Fridge Hero asks Google's
+  Gemini AI to invent a fancy dish name, a short description, and a simple
+  3-step recipe — perfect for demos and college assignments.
+
+  HOW TO ADD YOUR GEMINI API KEY:
+  1. Go to https://aistudio.google.com/apikey and create an API key.
+  2. In this file, find the constant: const GEMINI_API_KEY = 'YOUR_API_KEY';
+  3. Replace YOUR_API_KEY with your actual key (keep the quotes).
+
+  HOW TO RUN LOCALLY:
+  1. Save this file as index.html.
+  2. Open it in any modern browser (Chrome, Firefox, Edge, Safari).
+     Double-click the file, or drag it into a browser window.
+  3. For best results with fetch(), you can also serve it with a simple server:
+       npx serve .
+     Then open http://localhost:3000 (or the URL shown).
+
+  Note: Never commit your real API key to public repositories.
+  =============================================================================
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fridge Hero — AI Recipe Generator</title>
+
+  <style>
+    /* ==========================================================================
+       CSS RESET & BASE
+       ========================================================================== */
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --color-primary: #6366f1;
+      --color-primary-dark: #4f46e5;
+      --color-accent: #f59e0b;
+      --color-text: #1e293b;
+      --color-text-muted: #64748b;
+      --color-error: #dc2626;
+      --color-card-bg: rgba(255, 255, 255, 0.75);
+      --color-recipe-bg: #fffbeb;
+      --shadow-soft: 0 8px 32px rgba(31, 38, 135, 0.15);
+      --shadow-recipe: 0 12px 40px rgba(0, 0, 0, 0.08);
+      --radius-lg: 20px;
+      --radius-md: 12px;
+      --transition: 0.25s ease;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      color: var(--color-text);
+      line-height: 1.6;
+      /* Gradient background */
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 35%, #f093fb 70%, #f5576c 100%);
+      background-attachment: fixed;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+
+    /* ==========================================================================
+       MAIN CARD — Glassmorphism container
+       ========================================================================== */
+    .app-wrapper {
+      width: 100%;
+      max-width: 520px;
+    }
+
+    .main-card {
+      background: var(--color-card-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-soft);
+      padding: 2rem 2rem 1.75rem;
+      transition: transform var(--transition), box-shadow var(--transition);
+    }
+
+    .main-card:hover {
+      box-shadow: 0 12px 48px rgba(31, 38, 135, 0.2);
+    }
+
+    /* ==========================================================================
+       HEADER
+       ========================================================================== */
+    .header {
+      text-align: center;
+      margin-bottom: 1.75rem;
+    }
+
+    .header h1 {
+      font-size: clamp(1.75rem, 5vw, 2.25rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--color-text);
+      margin-bottom: 0.35rem;
+    }
+
+    .header .subtitle {
+      font-size: 0.95rem;
+      color: var(--color-text-muted);
+      font-weight: 500;
+    }
+
+    /* ==========================================================================
+       FORM — Ingredient inputs
+       ========================================================================== */
+    .ingredient-form {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .input-group label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--color-text-muted);
+      margin-bottom: 0.35rem;
+    }
+
+    .input-group input {
+      width: 100%;
+      padding: 0.85rem 1rem;
+      font-size: 1rem;
+      border: 2px solid rgba(99, 102, 241, 0.2);
+      border-radius: var(--radius-md);
+      background: rgba(255, 255, 255, 0.9);
+      color: var(--color-text);
+      transition: border-color var(--transition), box-shadow var(--transition);
+    }
+
+    .input-group input:focus {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+    }
+
+    .input-group input::placeholder {
+      color: #94a3b8;
+    }
+
+    /* ==========================================================================
+       SUBMIT BUTTON
+       ========================================================================== */
+    .cook-btn {
+      width: 100%;
+      padding: 1rem 1.5rem;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #fff;
+      background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+      border: none;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
+      transition: transform var(--transition), box-shadow var(--transition), opacity var(--transition);
+    }
+
+    .cook-btn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
+    }
+
+    .cook-btn:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .cook-btn:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* ==========================================================================
+       MESSAGES — Error & validation
+       ========================================================================== */
+    .message-area {
+      margin-top: 1rem;
+      min-height: 0;
+    }
+
+    .error-message {
+      padding: 0.85rem 1rem;
+      background: rgba(220, 38, 38, 0.1);
+      border: 1px solid rgba(220, 38, 38, 0.3);
+      border-radius: var(--radius-md);
+      color: var(--color-error);
+      font-size: 0.9rem;
+      font-weight: 500;
+      text-align: center;
+      animation: fadeIn 0.3s ease;
+    }
+
+    /* ==========================================================================
+       RESULT — Recipe card output
+       ========================================================================== */
+    .result-container {
+      margin-top: 1.25rem;
+    }
+
+    .recipe-card {
+      background: var(--color-recipe-bg);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem 1.75rem;
+      box-shadow: var(--shadow-recipe);
+      border: 1px solid rgba(245, 158, 11, 0.2);
+      animation: fadeIn 0.4s ease;
+    }
+
+    .recipe-card .recipe-content {
+      font-size: 0.95rem;
+      color: var(--color-text);
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .recipe-card .recipe-content h2,
+    .recipe-card .recipe-content h3 {
+      color: var(--color-primary-dark);
+      margin-top: 1rem;
+      margin-bottom: 0.5rem;
+      font-weight: 700;
+    }
+
+    .recipe-card .recipe-content h2:first-child,
+    .recipe-card .recipe-content h3:first-child {
+      margin-top: 0;
+    }
+
+    .recipe-card .recipe-content strong {
+      color: var(--color-primary-dark);
+    }
+
+    .recipe-card .recipe-content ol,
+    .recipe-card .recipe-content ul {
+      margin: 0.5rem 0 0.5rem 1.25rem;
+    }
+
+    .recipe-card .recipe-content li {
+      margin-bottom: 0.35rem;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* ==========================================================================
+       FOOTER
+       ========================================================================== */
+    .footer-note {
+      text-align: center;
+      margin-top: 1.25rem;
+      font-size: 0.8rem;
+      color: rgba(255, 255, 255, 0.85);
+      font-weight: 500;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+    }
+
+    /* ==========================================================================
+       RESPONSIVE — Mobile layout
+       ========================================================================== */
+    @media (max-width: 480px) {
+      body {
+        padding: 1rem;
+      }
+
+      .main-card {
+        padding: 1.5rem 1.25rem 1.25rem;
+      }
+
+      .recipe-card {
+        padding: 1.25rem 1.15rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ==========================================================================
+       PAGE STRUCTURE
+       ========================================================================== -->
+  <div class="app-wrapper">
+    <main class="main-card" role="main">
+      <!-- Header -->
+      <header class="header">
+        <h1>🥗 Fridge Hero</h1>
+        <p class="subtitle">Turn random ingredients into a fancy recipe using AI</p>
+      </header>
+
+      <!-- Ingredient inputs -->
+      <form class="ingredient-form" id="ingredientForm" onsubmit="return false;">
+        <div class="input-group">
+          <label for="ingredient1">Ingredient 1</label>
+          <input
+            type="text"
+            id="ingredient1"
+            name="ingredient1"
+            placeholder="e.g. tomato"
+            autocomplete="off"
+          />
+        </div>
+        <div class="input-group">
+          <label for="ingredient2">Ingredient 2</label>
+          <input
+            type="text"
+            id="ingredient2"
+            name="ingredient2"
+            placeholder="e.g. cheese"
+            autocomplete="off"
+          />
+        </div>
+        <div class="input-group">
+          <label for="ingredient3">Ingredient 3</label>
+          <input
+            type="text"
+            id="ingredient3"
+            name="ingredient3"
+            placeholder="e.g. bread"
+            autocomplete="off"
+          />
+        </div>
+
+        <button type="button" class="cook-btn" id="cookBtn">Cook Magic</button>
+      </form>
+
+      <!-- Error messages and AI recipe output -->
+      <div class="message-area" id="messageArea" aria-live="polite"></div>
+      <div class="result-container" id="resultContainer"></div>
+    </main>
+
+    <p class="footer-note">Powered by Gemini AI</p>
+  </div>
+
+  <script>
+    /* ==========================================================================
+       CONFIGURATION — Replace YOUR_API_KEY with your Gemini API key
+       ========================================================================== */
+    const GEMINI_API_KEY = 'YOUR_API_KEY';
+    // gemini-2.5-flash works on the free tier; gemini-2.0-flash may return quota errors (429)
+    const GEMINI_MODEL = 'gemini-2.5-flash';
+    const GEMINI_API_URL =
+      'https://generativelanguage.googleapis.com/v1beta/models/' +
+      GEMINI_MODEL +
+      ':generateContent?key=' +
+      GEMINI_API_KEY;
+
+    /* ==========================================================================
+       DOM REFERENCES
+       ========================================================================== */
+    const cookBtn = document.getElementById('cookBtn');
+    const messageArea = document.getElementById('messageArea');
+    const resultContainer = document.getElementById('resultContainer');
+    const ingredientInputs = [
+      document.getElementById('ingredient1'),
+      document.getElementById('ingredient2'),
+      document.getElementById('ingredient3'),
+    ];
+
+    const DEFAULT_BTN_TEXT = 'Cook Magic';
+    const LOADING_BTN_TEXT = 'Cooking...';
+
+    /* ==========================================================================
+       UTILITY — Read and validate ingredients from the form
+       ========================================================================== */
+    function getIngredients() {
+      return ingredientInputs
+        .map(function (input) {
+          return input.value.trim();
+        })
+        .filter(function (value) {
+          return value.length > 0;
+        });
+    }
+
+    function buildPrompt(ingredients) {
+      var listText;
+
+      if (ingredients.length === 1) {
+        listText = ingredients[0];
+      } else if (ingredients.length === 2) {
+        listText = ingredients[0] + ' and ' + ingredients[1];
+      } else {
+        listText =
+          ingredients.slice(0, -1).join(', ') + ', and ' + ingredients[ingredients.length - 1];
+      }
+
+      return (
+        'I have ' +
+        listText +
+        '. Give me:\n' +
+        '1. A fancy dish name\n' +
+        '2. A short description\n' +
+        '3. A simple 3-step recipe'
+      );
+    }
+
+    /* ==========================================================================
+       UI HELPERS — Loading state, errors, clearing views
+       ========================================================================== */
+    function setLoading(isLoading) {
+      cookBtn.disabled = isLoading;
+      cookBtn.textContent = isLoading ? LOADING_BTN_TEXT : DEFAULT_BTN_TEXT;
+    }
+
+    function showError(message) {
+      messageArea.innerHTML =
+        '<p class="error-message" role="alert">' + escapeHtml(message) + '</p>';
+      resultContainer.innerHTML = '';
+    }
+
+    function clearMessages() {
+      messageArea.innerHTML = '';
+    }
+
+    function escapeHtml(text) {
+      var div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    /* ==========================================================================
+       API — Call Gemini and return the generated text
+       ========================================================================== */
+    function getFriendlyErrorMessage(error, apiErrorBody) {
+      if (apiErrorBody && apiErrorBody.error && apiErrorBody.error.message) {
+        var apiMsg = apiErrorBody.error.message;
+        if (apiErrorBody.error.code === 429 || apiErrorBody.error.status === 'RESOURCE_EXHAUSTED') {
+          return 'API quota exceeded. Wait a minute and try again, or switch GEMINI_MODEL in index.html (e.g. gemini-2.5-flash).';
+        }
+        if (apiErrorBody.error.code === 400 && apiMsg.indexOf('API key') !== -1) {
+          return 'Invalid API key. Check GEMINI_API_KEY in index.html.';
+        }
+        return apiMsg.split('\n')[0];
+      }
+
+      if (error && error.message) {
+        if (error.message === 'Failed to fetch') {
+          return 'Network blocked (CORS). Run a local server: open terminal in FridgeHero folder and run: npx serve .';
+        }
+        return error.message;
+      }
+
+      return 'Something went wrong. Please try again.';
+    }
+
+    async function callGeminiAPI(prompt) {
+      var response = await fetch(GEMINI_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  text: prompt,
+                },
+              ],
+            },
+          ],
+        }),
+      });
+
+      var data = await response.json();
+
+      if (!response.ok) {
+        var apiError = new Error('API request failed');
+        apiError.apiBody = data;
+        throw apiError;
+      }
+
+      if (
+        !data.candidates ||
+        !data.candidates[0] ||
+        !data.candidates[0].content ||
+        !data.candidates[0].content.parts ||
+        !data.candidates[0].content.parts[0].text
+      ) {
+        var formatError = new Error('Unexpected API response format');
+        formatError.apiBody = data;
+        throw formatError;
+      }
+
+      var result = data.candidates[0].content.parts[0].text;
+      return result;
+    }
+
+    /* ==========================================================================
+       RENDER — Display the recipe in a styled card
+       ========================================================================== */
+    function renderResult(recipeText) {
+      var formattedHtml = formatRecipeText(recipeText);
+
+      resultContainer.innerHTML =
+        '<article class="recipe-card">' +
+        '  <div class="recipe-content">' +
+        formattedHtml +
+        '  </div>' +
+        '</article>';
+    }
+
+    /**
+     * Converts plain AI text into simple HTML (headings, lists) for readability.
+     * Keeps output safe by escaping first, then applying light formatting.
+     */
+    function formatRecipeText(text) {
+      var safe = escapeHtml(text);
+
+      // Bold markdown-style **text**
+      safe = safe.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+      // Numbered section headers like "1. Dish Name"
+      safe = safe.replace(/^(\d+)\.\s+(.+)$/gm, '<h3>$1. $2</h3>');
+
+      // Lines that look like a title at the start (first non-empty line)
+      var lines = safe.split('\n');
+      if (lines.length > 0 && lines[0].trim() && !lines[0].startsWith('<')) {
+        lines[0] = '<h2>' + lines[0].trim() + '</h2>';
+      }
+
+      return lines.join('\n');
+    }
+
+    /* ==========================================================================
+       MAIN — Button click handler: validate, fetch, render
+       ========================================================================== */
+    async function handleCookMagic() {
+      clearMessages();
+      resultContainer.innerHTML = '';
+
+      var ingredients = getIngredients();
+
+      if (ingredients.length === 0) {
+        showError('Please enter at least one ingredient.');
+        return;
+      }
+
+      var prompt = buildPrompt(ingredients);
+
+      setLoading(true);
+
+      try {
+        var recipeText = await callGeminiAPI(prompt);
+        renderResult(recipeText);
+      } catch (error) {
+        console.error('Fridge Hero error:', error);
+        showError(getFriendlyErrorMessage(error, error.apiBody));
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    /* ==========================================================================
+       EVENT LISTENERS
+       ========================================================================== */
+    cookBtn.addEventListener('click', handleCookMagic);
+
+    // Allow Enter key in any input to trigger the recipe
+    ingredientInputs.forEach(function (input) {
+      input.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          handleCookMagic();
+        }
+      });
+    });
+  </script>
+</body>
+</html>
